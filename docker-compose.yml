@@ -1,0 +1,136 @@
+services:
+  # ── Application Database ──────────────────────────────────────────────────
+  database:
+    image: postgres:16
+    container_name: cvpipeline-database
+    environment:
+      POSTGRES_USER: cvpipeline
+      POSTGRES_PASSWORD: cvpipeline
+      POSTGRES_DB: cvpipeline
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cvpipeline"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── File Server ───────────────────────────────────────────────────────────
+  file-server:
+    build: ./file-server
+    container_name: cvpipeline-file-server
+    volumes:
+      - file-storage:/data/files
+    ports:
+      - "8001:8000"
+    networks:
+      - app-net
+
+  # ── API Server ────────────────────────────────────────────────────────────
+  api:
+    build: ./api
+    container_name: cvpipeline-api
+    environment:
+      APP_DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
+      APP_FILE_SERVER_URL: "http://file-server:8000"
+      APP_TEMPORAL_HOST: "temporal:7233"
+    ports:
+      - "8002:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ── Temporal Worker ───────────────────────────────────────────────────────
+  worker:
+    build: ./api
+    container_name: cvpipeline-worker
+    command: ["python", "-m", "temporal.worker"]
+    environment:
+      APP_DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
+      APP_FILE_SERVER_URL: "http://file-server:8000"
+      APP_TEMPORAL_HOST: "temporal:7233"
+    depends_on:
+      database:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    networks:
+      - app-net
+    restart: on-failure
+
+  # ── Temporal PostgreSQL (dedicated) ───────────────────────────────────────
+  temporal-postgresql:
+    image: postgres:16
+    container_name: cvpipeline-temporal-pg
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal-pgdata:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Temporal Server ───────────────────────────────────────────────────────
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: cvpipeline-temporal
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-postgresql
+    ports:
+      - "7233:7233"
+    depends_on:
+      temporal-postgresql:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ── Temporal UI ───────────────────────────────────────────────────────────
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: cvpipeline-temporal-ui
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - temporal
+    networks:
+      - app-net
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: cvpipeline-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  temporal-pgdata:
+  file-storage:
