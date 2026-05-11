@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine
 from models import Base
-from routers import health
+from routers import cv, health
 
 
 @asynccontextmanager
@@ -38,3 +38,4 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router)
+app.include_router(cv.router)

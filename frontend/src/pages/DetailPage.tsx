@@ -1,0 +1,114 @@
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Trash2 } from 'lucide-react'
+import { API_BASE_URL } from '../config'
+import type { CV } from './MainPage'
+import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal'
+
+export function DetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  
+  const [cv, setCv] = useState<CV | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+
+  useEffect(() => {
+    const fetchCv = async () => {
+      try {
+        setLoading(true)
+        const res = await fetch(`${API_BASE_URL}/cvs/${id}`)
+        if (!res.ok) {
+          if (res.status === 404) throw new Error('CV not found')
+          throw new Error('Failed to fetch CV details')
+        }
+        const data = await res.json()
+        setCv(data)
+        setError(null)
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (id) fetchCv()
+  }, [id])
+
+  const handleDelete = async () => {
+    if (!cv) return
+    const res = await fetch(`${API_BASE_URL}/cvs/${cv.id}`, {
+      method: 'DELETE'
+    })
+    
+    if (!res.ok) {
+      const errData = await res.json()
+      throw new Error(errData.detail || 'Deletion failed')
+    }
+    
+    // Successfully deleted
+    navigate('/')
+  }
+
+  if (loading) {
+    return <div className="page-container p-8 text-center">Loading CV Details...</div>
+  }
+
+  if (error || !cv) {
+    return (
+      <div className="page-container p-8 text-center">
+        <div className="error-alert max-w-md mx-auto">{error || 'Unknown error occurred'}</div>
+        <button className="btn btn-secondary mt-4" onClick={() => navigate('/')}>
+          <ArrowLeft size={18} /> Back to List
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <div className="flex items-center gap-4">
+          <button className="btn-icon btn-secondary" onClick={() => navigate('/')} title="Back to List">
+            <ArrowLeft size={20} />
+          </button>
+          <h2>CV Details</h2>
+        </div>
+        <button className="btn btn-danger" onClick={() => setIsDeleteModalOpen(true)}>
+          <Trash2 size={18} /> Delete CV
+        </button>
+      </div>
+
+      <div className="detail-card">
+        <div className="detail-row">
+          <span className="detail-label">ID:</span>
+          <span className="detail-value monospace-text">{cv.id}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Filename:</span>
+          <span className="detail-value">{cv.filename}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">File Hash:</span>
+          <span className="detail-value monospace-text">{cv.file_hash}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Status:</span>
+          <span className={`status-badge status-${cv.status}`}>{cv.status}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Uploaded At:</span>
+          <span className="detail-value">{new Date(cv.created_at).toLocaleString()}</span>
+        </div>
+      </div>
+
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        fileName={cv.filename}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+      />
+    </div>
+  )
+}
