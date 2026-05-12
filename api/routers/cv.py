@@ -13,6 +13,9 @@ from models import CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
 from schemas import CvListResponse, CvResponse, ExecutionResponse
 from temporalio.client import Client
 from temporal.workflows import CvProcessingWorkflow
+import structlog
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/cvs", tags=["cvs"])
 
@@ -55,6 +58,8 @@ async def upload_cv(
         ".pdf"
     ):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    logger.info("cv_upload_start", filename=file.filename)
 
     async with httpx.AsyncClient() as client:
         content = await file.read()
@@ -104,7 +109,9 @@ async def upload_cv(
         )
         existing = existing_cv.scalars().first()
         if existing:
+            logger.info("cv_upload_duplicate", file_hash=file_data["id"])
             return existing
+        logger.error("cv_upload_failed", error=str(e), filename=file.filename)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -128,6 +135,7 @@ async def delete_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
 
     await db.delete(cv)
     await db.commit()
+    logger.info("cv_deleted", cv_id=cv_id, file_hash=cv.file_hash)
 
 
 @router.post("/{cv_id}/process", response_model=ExecutionResponse)
@@ -157,6 +165,8 @@ async def process_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
         execution.workflow_id = handle.id
         await db.commit()
         
+        logger.info("cv_processing_started", cv_id=cv_id, execution_id=execution.id, workflow_id=handle.id)
+
         # Refetch to ensure relationships are loaded for Pydantic, avoiding identity map cache
         result = await db.execute(
             select(CvExecution)
@@ -190,6 +200,8 @@ async def download_artifact(artifact_id: int, db: AsyncSession = Depends(get_db)
     artifact = await db.get(CvExecutionArtifact, artifact_id)
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
+
+    logger.info("artifact_download_start", artifact_id=artifact_id, file_hash=artifact.file_hash)
 
     async def stream_file():
         async with httpx.AsyncClient() as client:

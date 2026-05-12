@@ -15,20 +15,21 @@ from config import settings
 from temporal.activities import extract_cv_text, set_execution_state
 from temporal.workflows import CvProcessingWorkflow
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from shared.logging_utils import setup_logging
+
+logger = setup_logging("temporal-worker")
 
 
 async def main() -> None:
     """Connect to Temporal and run the worker."""
     logger.info(
-        "Connecting to Temporal at %s ...", settings.temporal_host
+        "connecting_to_temporal", host=settings.temporal_host
     )
 
     client = await Client.connect(settings.temporal_host)
 
     logger.info(
-        "Starting worker on task queue: %s", settings.temporal_task_queue
+        "worker_started", task_queue=settings.temporal_task_queue
     )
 
     worker = Worker(

@@ -13,6 +13,11 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
+from shared.logging_utils import setup_logging
+
+logger = setup_logging("file-server")
+logger.info("File server starting up")
+
 STORAGE_DIR = Path("/data/files")
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -67,6 +72,7 @@ async def upload_file(file: UploadFile):
     # Check for existing file (idempotent)
     existing = _find_file_by_id(file_hash)
     if existing:
+        logger.info("file_upload_duplicate", file_id=file_hash, filename=original_name)
         meta = json.loads(_meta_path(file_hash).read_text())
         return JSONResponse(
             content={
@@ -94,6 +100,8 @@ async def upload_file(file: UploadFile):
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
     _meta_path(file_hash).write_text(json.dumps(meta, indent=2))
+
+    logger.info("file_uploaded", file_id=file_hash, filename=original_name, size=file_size)
 
     return JSONResponse(
         status_code=201,
@@ -123,6 +131,8 @@ async def get_file(file_id: str):
         meta = json.loads(meta_file.read_text())
         original_name = meta.get("original_filename", file_id)
 
+    logger.info("file_served", file_id=file_id, filename=original_name)
+
     return FileResponse(
         path=stored_path,
         filename=original_name,
@@ -145,6 +155,8 @@ async def delete_file(file_id: str):
     meta_file = _meta_path(file_id)
     if meta_file.exists():
         meta_file.unlink()
+
+    logger.info("file_deleted", file_id=file_id)
 
     return None
 

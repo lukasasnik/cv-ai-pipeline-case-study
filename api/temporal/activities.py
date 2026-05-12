@@ -10,18 +10,21 @@ from config import settings
 from database import async_session
 from models import ArtifactType, CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
 from temporal.extractors.pdf_extractor import PDFExtractor
+import structlog
+
+logger = structlog.get_logger()
 
 
 @activity.defn
 async def set_execution_state(execution_id: int, state: str) -> None:
     """Updates the state of a CV execution."""
-    activity.logger.info(f"Setting execution {execution_id} state to {state}")
+    logger.info("setting_execution_state", execution_id=execution_id, state=state)
     
     # Convert string to enum
     try:
         enum_state = ExecutionState(state)
     except ValueError:
-        activity.logger.error(f"Invalid execution state: {state}")
+        logger.error("invalid_execution_state", state=state)
         return
     
     async with async_session() as db:
@@ -30,7 +33,7 @@ async def set_execution_state(execution_id: int, state: str) -> None:
             execution.state = enum_state
             await db.commit()
         else:
-            activity.logger.warning(f"Execution {execution_id} not found.")
+            logger.warning("execution_not_found", execution_id=execution_id)
 
 
 @activity.defn
@@ -44,7 +47,7 @@ async def extract_cv_text(execution_id: int) -> int:
     Returns:
         The ID of the created CvExecutionArtifact.
     """
-    activity.logger.info(f"Starting extraction for execution {execution_id}")
+    logger.info("extraction_started", execution_id=execution_id)
 
     async with async_session() as db:
         execution = await db.get(CvExecution, execution_id)

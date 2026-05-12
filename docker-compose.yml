@@ -22,7 +22,9 @@ services:
 
   # ── File Server ───────────────────────────────────────────────────────────
   file-server:
-    build: ./file-server
+    build:
+      context: .
+      dockerfile: file-server/Dockerfile
     container_name: cvpipeline-file-server
     volumes:
       - file-storage:/data/files
@@ -33,7 +35,9 @@ services:
 
   # ── API Server ────────────────────────────────────────────────────────────
   api:
-    build: ./api
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     container_name: cvpipeline-api
     environment:
       APP_DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
@@ -49,7 +53,9 @@ services:
 
   # ── Temporal Worker ───────────────────────────────────────────────────────
   worker:
-    build: ./api
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     container_name: cvpipeline-worker
     command: ["python", "-m", "temporal.worker"]
     environment:

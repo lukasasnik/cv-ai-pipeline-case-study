@@ -10,6 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import engine
 from models import Base
 from routers import cv, health
+from shared.logging_utils import setup_logging
+
+logger = setup_logging("cv-api")
+logger.info("API service starting up")
 
 
 @asynccontextmanager

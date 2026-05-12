@@ -2,10 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Requirements from api subdir
+COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy shared code first (better caching if shared code changes less often than api)
+COPY shared/ ./shared/
+
+# Copy api code
+COPY api/ .
 
 EXPOSE 8000
 
