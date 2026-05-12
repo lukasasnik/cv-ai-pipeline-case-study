@@ -5,11 +5,14 @@ import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import get_db
-from models import CvRecord
-from schemas import CvListResponse, CvResponse
+from models import CvExecution, CvRecord, ExecutionState
+from schemas import CvListResponse, CvResponse, ExecutionResponse
+from temporalio.client import Client
+from temporal.workflows import CvProcessingWorkflow
 
 router = APIRouter(prefix="/cvs", tags=["cvs"])
 
@@ -19,7 +22,11 @@ async def list_cvs(
     skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
-        select(CvRecord).order_by(desc(CvRecord.id)).offset(skip).limit(limit)
+        select(CvRecord)
+        .options(selectinload(CvRecord.executions).selectinload(CvExecution.artifacts))
+        .order_by(desc(CvRecord.id))
+        .offset(skip)
+        .limit(limit)
     )
     cvs = result.scalars().all()
     count_result = await db.execute(select(func.count(CvRecord.id)))
@@ -29,7 +36,7 @@ async def list_cvs(
 
 @router.get("/{cv_id}", response_model=CvResponse)
 async def get_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    cv = await db.get(CvRecord, cv_id)
+    cv = await db.get(CvRecord, cv_id, options=[selectinload(CvRecord.executions).selectinload(CvExecution.artifacts)])
     if not cv:
         raise HTTPException(status_code=404, detail="CV not found")
     return cv
@@ -73,13 +80,17 @@ async def upload_cv(
         )
         db.add(cv_record)
         await db.commit()
-        await db.refresh(cv_record)
+        
+        # Refetch to ensure relationships are loaded for Pydantic
+        cv_record = await db.get(CvRecord, cv_record.id, options=[selectinload(CvRecord.executions).selectinload(CvExecution.artifacts)])
         return cv_record
     except Exception as e:
         await db.rollback()
         # Check if it already exists
         existing_cv = await db.execute(
-            select(CvRecord).where(CvRecord.file_hash == file_data["id"])
+            select(CvRecord)
+            .options(selectinload(CvRecord.executions).selectinload(CvExecution.artifacts))
+            .where(CvRecord.file_hash == file_data["id"])
         )
         existing = existing_cv.scalars().first()
         if existing:
@@ -107,3 +118,45 @@ async def delete_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
     await db.delete(cv)
     await db.commit()
+
+
+@router.post("/{cv_id}/process", response_model=ExecutionResponse)
+async def process_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    cv = await db.get(CvRecord, cv_id)
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+
+    execution = CvExecution(
+        cv_id=cv_id,
+        state=ExecutionState.NEW
+    )
+    db.add(execution)
+    await db.commit()
+    await db.refresh(execution)
+
+    try:
+        client = await Client.connect(settings.temporal_host)
+        
+        handle = await client.start_workflow(
+            CvProcessingWorkflow.run,
+            execution.id,
+            id=f"cv-processing-{execution.id}",
+            task_queue=settings.temporal_task_queue,
+        )
+        
+        execution.workflow_id = handle.id
+        await db.commit()
+        
+        # Refetch to ensure relationships are loaded for Pydantic, avoiding identity map cache
+        result = await db.execute(
+            select(CvExecution)
+            .options(selectinload(CvExecution.artifacts))
+            .where(CvExecution.id == execution.id)
+        )
+        execution = result.scalar_one()
+        
+        return execution
+    except Exception as e:
+        execution.state = ExecutionState.ERROR
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to start workflow: {e}")

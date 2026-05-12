@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, Play } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import type { CV } from './MainPage'
 import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal'
@@ -13,6 +13,7 @@ export function DetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [processing, setProcessing] = useState(false)
 
   useEffect(() => {
     const fetchCv = async () => {
@@ -51,6 +52,25 @@ export function DetailPage() {
     navigate('/')
   }
 
+  const handleProcess = async () => {
+    if (!cv) return
+    try {
+      setProcessing(true)
+      const res = await fetch(`${API_BASE_URL}/cvs/${cv.id}/process`, {
+        method: 'POST'
+      })
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.detail || 'Processing failed')
+      }
+      alert('CV processing started successfully!')
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   if (loading) {
     return <div className="page-container p-8 text-center">Loading CV Details...</div>
   }
@@ -75,9 +95,14 @@ export function DetailPage() {
           </button>
           <h2>CV Details</h2>
         </div>
-        <button className="btn btn-danger" onClick={() => setIsDeleteModalOpen(true)}>
-          <Trash2 size={18} /> Delete CV
-        </button>
+        <div className="flex gap-2">
+          <button className="btn btn-primary" onClick={handleProcess} disabled={processing}>
+            <Play size={18} /> {processing ? 'Starting...' : 'Process CV'}
+          </button>
+          <button className="btn btn-danger" onClick={() => setIsDeleteModalOpen(true)}>
+            <Trash2 size={18} /> Delete CV
+          </button>
+        </div>
       </div>
 
       <div className="detail-card">
