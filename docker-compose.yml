@@ -132,6 +132,51 @@ services:
     networks:
       - app-net
 
+  # ── Loki ──────────────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:latest
+    container_name: cvpipeline-loki
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    networks:
+      - app-net
+
+  # ── Promtail ──────────────────────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:latest
+    container_name: cvpipeline-promtail
+    volumes:
+      - ./observability/promtail-config.yaml:/etc/promtail/config.yaml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    networks:
+      - app-net
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cvpipeline-grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_BASIC_ENABLED=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+    ports:
+      - "3002:3000"
+    depends_on:
+      - loki
+    networks:
+      - app-net
+
 networks:
   app-net:
     driver: bridge
@@ -140,3 +185,5 @@ volumes:
   pgdata:
   temporal-pgdata:
   file-storage:
+  loki-data:
+  grafana-data:
