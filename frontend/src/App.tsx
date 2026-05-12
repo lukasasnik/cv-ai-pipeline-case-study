@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import './App.css'
 import { MainPage } from './pages/MainPage'
 import { DetailPage } from './pages/DetailPage'
+import { ExecutionDetailPage } from './pages/ExecutionDetailPage'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Routes>
           <Route path="/" element={<MainPage />} />
           <Route path="/cv/:id" element={<DetailPage />} />
+          <Route path="/executions/:id" element={<ExecutionDetailPage />} />
         </Routes>
       </main>
     </div>

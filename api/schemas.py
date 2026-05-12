@@ -13,6 +13,7 @@ class ExecutionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    cv_id: int
     workflow_id: str | None = None
     state: ExecutionState
     created_at: datetime

@@ -2,13 +2,14 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import get_db
-from models import CvExecution, CvRecord, ExecutionState
+from models import CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
 from schemas import CvListResponse, CvResponse, ExecutionResponse
 from temporalio.client import Client
 from temporal.workflows import CvProcessingWorkflow
@@ -169,3 +170,46 @@ async def process_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
         execution.state = ExecutionState.ERROR
         await db.commit()
         raise HTTPException(status_code=500, detail=f"Failed to start workflow: {e}")
+
+
+@router.get("/executions/{execution_id}", response_model=ExecutionResponse)
+async def get_execution(execution_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(CvExecution)
+        .options(selectinload(CvExecution.artifacts))
+        .where(CvExecution.id == execution_id)
+    )
+    execution = result.scalars().first()
+    if not execution:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    return execution
+
+
+@router.get("/artifacts/{artifact_id}/download")
+async def download_artifact(artifact_id: int, db: AsyncSession = Depends(get_db)):
+    artifact = await db.get(CvExecutionArtifact, artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    async def stream_file():
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                "GET", f"{settings.file_server_url}/files/{artifact.file_hash}"
+            ) as response:
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=response.status_code, detail="File server error"
+                    )
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+
+    # We don't have the original filename here easily without another call to file-server
+    # but the file-server response might have it in headers.
+    # For now, let's just proxy the stream.
+    return StreamingResponse(
+        stream_file(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="artifact_{artifact.id}_{artifact.file_hash[:8]}"'
+        },
+    )

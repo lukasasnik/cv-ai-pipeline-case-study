@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Trash2, Play, ExternalLink } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import type { CV } from './MainPage'
@@ -146,7 +146,11 @@ export function DetailPage() {
               <tbody>
                 {cv.executions.map(exec => (
                   <tr key={exec.id}>
-                    <td>{exec.id}</td>
+                    <td>
+                      <Link to={`/executions/${exec.id}`} className="text-primary hover:underline" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: 600 }}>
+                        {exec.id}
+                      </Link>
+                    </td>
                     <td className="monospace-text">
                       {exec.workflow_id ? (
                         <a 
