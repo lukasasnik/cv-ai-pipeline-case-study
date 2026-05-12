@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from shared.logging_utils import setup_logging
 
+# Initialize logging as early as possible
 logger = setup_logging("file-server")
 logger.info("File server starting up")
 

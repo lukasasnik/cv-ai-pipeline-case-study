@@ -7,12 +7,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from shared.logging_utils import setup_logging
+
+# Initialize logging as early as possible
+logger = setup_logging("cv-api")
+
 from database import engine
 from models import Base
 from routers import cv, health
-from shared.logging_utils import setup_logging
-
-logger = setup_logging("cv-api")
 logger.info("API service starting up")
 
 

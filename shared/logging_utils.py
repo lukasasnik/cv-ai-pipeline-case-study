@@ -27,4 +27,5 @@ def setup_logging(service_name: str):
     )
     
     # Return a logger for the service
-    return structlog.get_logger(service=service_name)
+    structlog.contextvars.bind_contextvars(service=service_name)
+    return structlog.get_logger()

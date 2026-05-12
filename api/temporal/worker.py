@@ -8,16 +8,17 @@ Run this module directly to start the worker:
 import asyncio
 import logging
 
+from shared.logging_utils import setup_logging
+
+# Initialize logging as early as possible
+logger = setup_logging("temporal-worker")
+
 from temporalio.client import Client
 from temporalio.worker import Worker
 
 from config import settings
 from temporal.activities import extract_cv_text, set_execution_state
 from temporal.workflows import CvProcessingWorkflow
-
-from shared.logging_utils import setup_logging
-
-logger = setup_logging("temporal-worker")
 
 
 async def main() -> None:
