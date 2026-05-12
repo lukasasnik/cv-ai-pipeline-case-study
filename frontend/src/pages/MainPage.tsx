@@ -6,12 +6,20 @@ import { API_BASE_URL } from '../config'
 import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal'
 import { UploadModal } from '../components/UploadModal'
 
+export interface Execution {
+  id: number
+  workflow_id: string | null
+  state: string
+  created_at: string
+}
+
 export interface CV {
   id: number
   filename: string
   file_hash: string
   status: string
   created_at: string
+  executions: Execution[]
 }
 
 export function MainPage() {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2, Play } from 'lucide-react'
+import { ArrowLeft, Trash2, Play, ExternalLink } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import type { CV } from './MainPage'
 import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal'
@@ -126,6 +126,54 @@ export function DetailPage() {
           <span className="detail-label">Uploaded At:</span>
           <span className="detail-value">{new Date(cv.created_at).toLocaleString()}</span>
         </div>
+      </div>
+      
+      <div className="executions-section mt-8">
+        <h3>Executions</h3>
+        {!cv.executions || cv.executions.length === 0 ? (
+          <p className="text-secondary mt-2">No executions yet.</p>
+        ) : (
+          <div className="table-container mt-4">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Id</th>
+                  <th>Workflow Id</th>
+                  <th>State</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cv.executions.map(exec => (
+                  <tr key={exec.id}>
+                    <td>{exec.id}</td>
+                    <td className="monospace-text">
+                      {exec.workflow_id ? (
+                        <a 
+                          href={`http://localhost:8080/namespaces/default/workflows/${exec.workflow_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-primary hover:underline"
+                          style={{ color: 'var(--primary-color)', textDecoration: 'none' }}
+                        >
+                          {exec.workflow_id} <ExternalLink size={14} />
+                        </a>
+                      ) : (
+                        <span className="text-secondary">N/A</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`status-badge status-${exec.state}`}>
+                        {exec.state}
+                      </span>
+                    </td>
+                    <td>{new Date(exec.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <DeleteConfirmationModal
