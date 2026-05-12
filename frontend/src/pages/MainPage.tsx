@@ -7,7 +7,7 @@ import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal'
 import { UploadModal } from '../components/UploadModal'
 
 export interface CV {
-  id: string
+  id: number
   filename: string
   file_hash: string
   status: string
@@ -157,7 +157,7 @@ export function MainPage() {
               <tbody>
                 {cvs.map(cv => (
                   <tr key={cv.id}>
-                    <td className="monospace-text" title={cv.id}>{cv.id.substring(0, 8)}...</td>
+                    <td className="monospace-text" title={String(cv.id)}>{cv.id}</td>
                     <td>{cv.filename}</td>
                     <td className="monospace-text" title={cv.file_hash}>{cv.file_hash.substring(0, 8)}...</td>
                     <td>

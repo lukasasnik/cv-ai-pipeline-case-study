@@ -1,5 +1,4 @@
 from datetime import datetime
-import uuid
 from pydantic import BaseModel, ConfigDict
 from models import ExecutionState, ArtifactType
 
@@ -22,7 +21,7 @@ class ExecutionResponse(BaseModel):
 class CvResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    id: int
     filename: str
     file_hash: str
     status: str

@@ -1,4 +1,3 @@
-import uuid
 from typing import Any
 
 import httpx
@@ -35,8 +34,13 @@ async def list_cvs(
 
 
 @router.get("/{cv_id}", response_model=CvResponse)
-async def get_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    cv = await db.get(CvRecord, cv_id, options=[selectinload(CvRecord.executions).selectinload(CvExecution.artifacts)])
+async def get_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(CvRecord)
+        .options(selectinload(CvRecord.executions).selectinload(CvExecution.artifacts))
+        .where(CvRecord.id == cv_id)
+    )
+    cv = result.scalars().first()
     if not cv:
         raise HTTPException(status_code=404, detail="CV not found")
     return cv
@@ -81,8 +85,13 @@ async def upload_cv(
         db.add(cv_record)
         await db.commit()
         
-        # Refetch to ensure relationships are loaded for Pydantic
-        cv_record = await db.get(CvRecord, cv_record.id, options=[selectinload(CvRecord.executions).selectinload(CvExecution.artifacts)])
+        # Refetch to ensure relationships are loaded for Pydantic, avoiding identity map cache issues with db.get
+        result = await db.execute(
+            select(CvRecord)
+            .options(selectinload(CvRecord.executions).selectinload(CvExecution.artifacts))
+            .where(CvRecord.id == cv_record.id)
+        )
+        cv_record = result.scalar_one()
         return cv_record
     except Exception as e:
         await db.rollback()
@@ -99,7 +108,7 @@ async def upload_cv(
 
 
 @router.delete("/{cv_id}", status_code=204)
-async def delete_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
     cv = await db.get(CvRecord, cv_id)
     if not cv:
         raise HTTPException(status_code=404, detail="CV not found")
@@ -121,7 +130,7 @@ async def delete_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{cv_id}/process", response_model=ExecutionResponse)
-async def process_cv(cv_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def process_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
     cv = await db.get(CvRecord, cv_id)
     if not cv:
         raise HTTPException(status_code=404, detail="CV not found")

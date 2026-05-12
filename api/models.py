@@ -3,7 +3,6 @@ SQLAlchemy ORM models.
 """
 
 import enum
-import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
@@ -30,8 +29,8 @@ class CvRecord(Base):
 
     __tablename__ = "cv_record"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        primary_key=True, default=uuid.uuid4
+    id: Mapped[int] = mapped_column(
+        primary_key=True, autoincrement=True
     )
     filename: Mapped[str] = mapped_column(String(512))
     file_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -63,7 +62,7 @@ class CvExecution(Base):
     __tablename__ = "cv_execution"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    cv_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cv_record.id"), index=True)
+    cv_id: Mapped[int] = mapped_column(ForeignKey("cv_record.id"), index=True)
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     state: Mapped[ExecutionState] = mapped_column(
         Enum(ExecutionState, name="execution_state"), default=ExecutionState.NEW
