@@ -8,7 +8,7 @@ from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from temporal.activities import extract_cv_text, set_execution_state
+    from temporal.activities import extract_cv_text, extract_structured_information, set_execution_state
     from models import ExecutionState
 
 
@@ -35,11 +35,17 @@ class CvProcessingWorkflow:
         )
 
         try:
-            # Extract text
             artifact_id = await workflow.execute_activity(
                 extract_cv_text,
                 args=[cv_execution_id],
                 start_to_close_timeout=timedelta(minutes=5),
+            )
+
+            # Extract structured information using LLM
+            structured_artifact_id = await workflow.execute_activity(
+                extract_structured_information,
+                args=[cv_execution_id, artifact_id],
+                start_to_close_timeout=timedelta(minutes=10),
             )
             
             # If successful, set state to SUCCESS
@@ -48,7 +54,7 @@ class CvProcessingWorkflow:
                 args=[cv_execution_id, ExecutionState.SUCCESS.value],
                 start_to_close_timeout=timedelta(seconds=10),
             )
-            return f"Success: Extracted artifact {artifact_id}"
+            return f"Success: Extracted artifacts {artifact_id} and {structured_artifact_id}"
 
         except ApplicationError as e:
             # Set state to ERROR and re-raise to fail the workflow

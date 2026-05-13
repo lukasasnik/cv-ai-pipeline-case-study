@@ -19,8 +19,13 @@ class Settings(BaseSettings):
     # Temporal
     temporal_host: str = "temporal:7233"
     temporal_task_queue: str = "cv-pipeline-queue"
+    
+    # AI API
+    ai_api_url: str = "http://host.docker.internal:1234/v1"
+    ai_api_token: str = "YOUR_TOKEN"
+    ai_model: str = "google/gemma-4-26b-a4b"
 
-    model_config = {"env_prefix": "APP_"}
+    model_config = {"env_prefix": ""}
 
 
 settings = Settings()

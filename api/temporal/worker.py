@@ -17,7 +17,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from config import settings
-from temporal.activities import extract_cv_text, set_execution_state
+from temporal.activities import extract_cv_text, extract_structured_information, set_execution_state
 from temporal.workflows import CvProcessingWorkflow
 
 
@@ -37,7 +37,7 @@ async def main() -> None:
         client,
         task_queue=settings.temporal_task_queue,
         workflows=[CvProcessingWorkflow],
-        activities=[extract_cv_text, set_execution_state],
+        activities=[extract_cv_text, extract_structured_information, set_execution_state],
     )
 
     await worker.run()

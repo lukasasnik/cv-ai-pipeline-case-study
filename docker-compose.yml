@@ -40,9 +40,12 @@ services:
       dockerfile: api/Dockerfile
     container_name: cvpipeline-api
     environment:
-      APP_DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
-      APP_FILE_SERVER_URL: "http://file-server:8000"
-      APP_TEMPORAL_HOST: "temporal:7233"
+      DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
+      FILE_SERVER_URL: "http://file-server:8000"
+      TEMPORAL_HOST: "temporal:7233"
+      AI_API_URL: "http://host.docker.internal:1234/v1"
+      AI_API_TOKEN: "YOUR_TOKEN"
+      AI_MODEL: "google/gemma-4-26b-a4b"
     ports:
       - "8002:8000"
     depends_on:
@@ -59,9 +62,12 @@ services:
     container_name: cvpipeline-worker
     command: ["python", "-m", "temporal.worker"]
     environment:
-      APP_DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
-      APP_FILE_SERVER_URL: "http://file-server:8000"
-      APP_TEMPORAL_HOST: "temporal:7233"
+      DATABASE_URL: "postgresql+asyncpg://cvpipeline:cvpipeline@database:5432/cvpipeline"
+      FILE_SERVER_URL: "http://file-server:8000"
+      TEMPORAL_HOST: "temporal:7233"
+      AI_API_URL: "http://host.docker.internal:1234/v1"
+      AI_API_TOKEN: "YOUR_TOKEN"
+      AI_MODEL: "google/gemma-4-26b-a4b"
     depends_on:
       database:
         condition: service_healthy
