@@ -13,11 +13,14 @@ from models import CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
 from schemas import CvListResponse, CvResponse, ExecutionResponse
 from temporalio.client import Client
 from temporal.workflows import CvProcessingWorkflow
+from shared.file_server_client import FileServerClient, NotFoundError, FileServerError
 import structlog
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/cvs", tags=["cvs"])
+
+file_client = FileServerClient(settings.file_server_url)
 
 
 @router.get("", response_model=CvListResponse)
@@ -61,22 +64,12 @@ async def upload_cv(
 
     logger.info("cv_upload_start", filename=file.filename)
 
-    async with httpx.AsyncClient() as client:
+    try:
         content = await file.read()
-        files = {"file": (file.filename, content, file.content_type)}
-        try:
-            response = await client.post(
-                f"{settings.file_server_url}/files/upload", files=files
-            )
-            response.raise_for_status()
-            file_data = response.json()
-        except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"File server error: {exc}")
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=exc.response.status_code,
-                detail="File server returned error",
-            )
+        file_data = await file_client.upload(file.filename, content, file.content_type)
+    except FileServerError as exc:
+        logger.error("cv_upload_file_server_error", error=str(exc))
+        raise HTTPException(status_code=502, detail=f"File server error: {exc}")
 
     # Note: If the file hash already exists, the file-server will return it and not create a duplicate.
     # We should still create a CV record, or check if one exists. For now, creating a new DB record
@@ -86,7 +79,7 @@ async def upload_cv(
     # Let's handle this.
     try:
         cv_record = CvRecord(
-            filename=file.filename, file_hash=file_data["id"], status="uploaded"
+            filename=file.filename, file_hash=file_data.id, status="uploaded"
         )
         db.add(cv_record)
         await db.commit()
@@ -105,11 +98,11 @@ async def upload_cv(
         existing_cv = await db.execute(
             select(CvRecord)
             .options(selectinload(CvRecord.executions).selectinload(CvExecution.artifacts))
-            .where(CvRecord.file_hash == file_data["id"])
+            .where(CvRecord.file_hash == file_data.id)
         )
         existing = existing_cv.scalars().first()
         if existing:
-            logger.info("cv_upload_duplicate", file_hash=file_data["id"])
+            logger.info("cv_upload_duplicate", file_hash=file_data.id)
             return existing
         logger.error("cv_upload_failed", error=str(e), filename=file.filename)
         raise HTTPException(status_code=500, detail=str(e))
@@ -121,17 +114,14 @@ async def delete_cv(cv_id: int, db: AsyncSession = Depends(get_db)):
     if not cv:
         raise HTTPException(status_code=404, detail="CV not found")
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.delete(
-                f"{settings.file_server_url}/files/{cv.file_hash}"
-            )
-            if response.status_code not in (200, 204, 404):
-                response.raise_for_status()
-        except httpx.RequestError as exc:
-            raise HTTPException(
-                status_code=502, detail=f"File server error during deletion: {exc}"
-            )
+    try:
+        await file_client.delete(cv.file_hash)
+    except NotFoundError:
+        logger.warning("cv_delete_not_found_on_server", file_hash=cv.file_hash)
+    except FileServerError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"File server error during deletion: {exc}"
+        )
 
     await db.delete(cv)
     await db.commit()
@@ -204,16 +194,14 @@ async def download_artifact(artifact_id: int, db: AsyncSession = Depends(get_db)
     logger.info("artifact_download_start", artifact_id=artifact_id, file_hash=artifact.file_hash)
 
     async def stream_file():
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "GET", f"{settings.file_server_url}/files/{artifact.file_hash}"
-            ) as response:
-                if response.status_code != 200:
-                    raise HTTPException(
-                        status_code=response.status_code, detail="File server error"
-                    )
-                async for chunk in response.aiter_bytes():
-                    yield chunk
+        try:
+            content = await file_client.download(artifact.file_hash)
+            yield content
+        except NotFoundError:
+            raise HTTPException(status_code=404, detail="File not found on server")
+        except FileServerError as exc:
+            logger.error("artifact_download_error", error=str(exc), artifact_id=artifact_id)
+            raise HTTPException(status_code=502, detail=f"File server error: {exc}")
 
     # We don't have the original filename here easily without another call to file-server
     # but the file-server response might have it in headers.

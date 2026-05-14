@@ -11,13 +11,14 @@ from database import async_session
 from models import ArtifactType, CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
 from temporal.extractors.pdf_extractor import PDFExtractor
 from utils.ai_client import AIClient
+from shared.file_server_client import FileServerClient, NotFoundError, FileServerError
 import structlog
-import json
 
 logger = structlog.get_logger()
 
-# Initialize AIClient
+# Initialize AIClient and FileServerClient
 ai_client = AIClient()
+file_client = FileServerClient(settings.file_server_url)
 
 
 @activity.defn
@@ -66,16 +67,13 @@ async def extract_cv_text(execution_id: int) -> int:
         file_hash = cv_record.file_hash
 
     # 1. Download PDF from file server
-    file_url = f"{settings.file_server_url}/files/{file_hash}"
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(file_url)
-            response.raise_for_status()
-            pdf_bytes = response.content
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                raise ApplicationError(f"File {file_hash} not found on server", non_retryable=True)
-            raise
+    try:
+        pdf_bytes = await file_client.download(file_hash)
+    except NotFoundError:
+        raise ApplicationError(f"File {file_hash} not found on server", non_retryable=True)
+    except FileServerError as e:
+        logger.error("file_server_download_error", error=str(e), file_hash=file_hash)
+        raise
             
     # 2. Extract text using PDFExtractor
     extractor = PDFExtractor()
@@ -85,11 +83,12 @@ async def extract_cv_text(execution_id: int) -> int:
         raise ApplicationError(str(e), non_retryable=True)
 
     # 3. Upload extracted text to file server
-    async with httpx.AsyncClient() as client:
-        files = {"file": ("extracted.txt", extracted_text.encode("utf-8"), "text/plain")}
-        upload_response = await client.post(f"{settings.file_server_url}/files/upload", files=files)
-        upload_response.raise_for_status()
-        text_file_hash = upload_response.json()["id"]
+    try:
+        upload_data = await file_client.upload("extracted.txt", extracted_text.encode("utf-8"), "text/plain")
+        text_file_hash = upload_data.id
+    except FileServerError as e:
+        logger.error("file_server_upload_error", error=str(e))
+        raise
 
     # 4. Create Artifact in Database
     async with async_session() as db:
@@ -127,18 +126,13 @@ async def extract_structured_information(execution_id: int, artifact_id: int) ->
         file_hash = artifact.file_hash
 
     # 2. Download raw text from file server
-    file_url = f"{settings.file_server_url}/files/{file_hash}"
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(file_url)
-            response.raise_for_status()
-            raw_text = response.text
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                raise ApplicationError(f"File {file_hash} not found on server", non_retryable=True)
-            raise # Transient error, will retry
-        except httpx.RequestError:
-            raise # Transient error, will retry
+    try:
+        raw_text = await file_client.download_text(file_hash)
+    except NotFoundError:
+        raise ApplicationError(f"File {file_hash} not found on server", non_retryable=True)
+    except FileServerError as e:
+        logger.error("file_server_download_error", error=str(e), file_hash=file_hash)
+        raise # Transient error, will retry
 
     # 3. Call AIClient
     try:
@@ -156,12 +150,12 @@ async def extract_structured_information(execution_id: int, artifact_id: int) ->
         raise
 
     # 4. Upload structured result to file server
-    async with httpx.AsyncClient() as client:
-        result_json = json.dumps(structured_data, indent=2)
-        files = {"file": ("structured_cv.json", result_json.encode("utf-8"), "application/json")}
-        upload_response = await client.post(f"{settings.file_server_url}/files/upload", files=files)
-        upload_response.raise_for_status()
-        result_file_hash = upload_response.json()["id"]
+    try:
+        upload_data = await file_client.upload_json("structured_cv.json", structured_data)
+        result_file_hash = upload_data.id
+    except FileServerError as e:
+        logger.error("file_server_upload_error", error=str(e))
+        raise
 
     # 5. Create Artifact in Database
     async with async_session() as db:
