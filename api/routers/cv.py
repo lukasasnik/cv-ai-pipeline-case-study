@@ -8,8 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import settings
-from database import get_db
-from models import CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
+from database import get_db, CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
 from schemas import CvListResponse, CvResponse, ExecutionResponse
 from temporalio.client import Client
 from temporal.workflows import CvProcessingWorkflow

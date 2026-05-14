@@ -7,8 +7,14 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from config import settings
-from database import async_session
-from models import ArtifactType, CvExecution, CvExecutionArtifact, CvRecord, ExecutionState
+from database import (
+    async_session,
+    ArtifactType,
+    CvExecution,
+    CvExecutionArtifact,
+    CvRecord,
+    ExecutionState,
+)
 from temporal.extractors.pdf_extractor import PDFExtractor
 from utils.ai_client import AIClient
 from shared.file_server_client import FileServerClient, NotFoundError, FileServerError
@@ -19,6 +25,15 @@ logger = structlog.get_logger()
 # Initialize AIClient and FileServerClient
 ai_client = AIClient()
 file_client = FileServerClient(settings.file_server_url)
+
+
+async def persist_artifact(artifact: CvExecutionArtifact) -> int:
+    """Helper to persist a CvExecutionArtifact to the database."""
+    async with async_session() as db:
+        db.add(artifact)
+        await db.commit()
+        await db.refresh(artifact)
+        return artifact.id
 
 
 @activity.defn
@@ -91,17 +106,12 @@ async def extract_cv_text(execution_id: int) -> int:
         raise
 
     # 4. Create Artifact in Database
-    async with async_session() as db:
-        artifact = CvExecutionArtifact(
-            cv_execution_id=execution_id,
-            type=ArtifactType.EXTRACTED_INPUT,
-            file_hash=text_file_hash
-        )
-        db.add(artifact)
-        await db.commit()
-        await db.refresh(artifact)
-        
-        return artifact.id
+    artifact = CvExecutionArtifact(
+        cv_execution_id=execution_id,
+        type=ArtifactType.EXTRACTED_INPUT,
+        file_hash=text_file_hash
+    )
+    return await persist_artifact(artifact)
 
 
 @activity.defn
@@ -158,15 +168,11 @@ async def extract_structured_information(execution_id: int, artifact_id: int) ->
         raise
 
     # 5. Create Artifact in Database
-    async with async_session() as db:
-        new_artifact = CvExecutionArtifact(
-            cv_execution_id=execution_id,
-            type=ArtifactType.LLM_STRUCTURED_RAW,
-            file_hash=result_file_hash
-        )
-        db.add(new_artifact)
-        await db.commit()
-        await db.refresh(new_artifact)
-        
-        logger.info("llm_extraction_completed", artifact_id=new_artifact.id)
-        return new_artifact.id
+    new_artifact = CvExecutionArtifact(
+        cv_execution_id=execution_id,
+        type=ArtifactType.LLM_STRUCTURED_RAW,
+        file_hash=result_file_hash
+    )
+    artifact_id = await persist_artifact(new_artifact)
+    logger.info("llm_extraction_completed", artifact_id=artifact_id)
+    return artifact_id

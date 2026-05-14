@@ -12,8 +12,7 @@ from shared.logging_utils import setup_logging
 # Initialize logging as early as possible
 logger = setup_logging("cv-api")
 
-from database import engine
-from models import Base
+from database import engine, Base
 from routers import cv, health
 logger.info("API service starting up")
 

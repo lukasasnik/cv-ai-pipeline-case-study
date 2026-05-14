@@ -9,7 +9,7 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from temporal.activities import extract_cv_text, extract_structured_information, set_execution_state
-    from models import ExecutionState
+    from database import ExecutionState
 
 
 @workflow.defn

@@ -6,8 +6,9 @@ WORKDIR /app
 COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared code first (better caching if shared code changes less often than api)
+# Copy shared code and database configuration
 COPY shared/ ./shared/
+COPY database/ ./database/
 
 # Copy api code
 COPY api/ .

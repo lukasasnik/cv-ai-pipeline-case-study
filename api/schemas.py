@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
-from models import ExecutionState, ArtifactType
+from database import ExecutionState, ArtifactType
 
 class ArtifactResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
