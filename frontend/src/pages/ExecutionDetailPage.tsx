@@ -108,7 +108,21 @@ export function ExecutionDetailPage() {
         </div>
         <div className="detail-row">
           <span className="detail-label">Workflow ID:</span>
-          <span className="detail-value monospace-text">{execution.workflow_id || 'N/A'}</span>
+          <span className="detail-value monospace-text">
+            {execution.workflow_id ? (
+              <a 
+                href={`http://localhost:8080/namespaces/default/workflows/${execution.workflow_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+                style={{ color: 'var(--primary-color)', textDecoration: 'none' }}
+              >
+                {execution.workflow_id} <ExternalLink size={14} />
+              </a>
+            ) : (
+              'N/A'
+            )}
+          </span>
         </div>
         <div className="detail-row">
           <span className="detail-label">Started At:</span>
