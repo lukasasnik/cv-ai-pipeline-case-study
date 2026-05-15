@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # AI API
     ai_api_url: str = "http://host.docker.internal:1234/v1"
     ai_api_token: str = "YOUR_TOKEN"
-    ai_model: str = "google/gemma-4-26b-a4b"
+    ai_model: str = "google/gemma-4-e4b"
+    ai_reasoning_effort: str = "none"
 
     model_config = {"env_prefix": ""}
 

@@ -26,10 +26,12 @@ class AIClient:
         self.api_url = api_url or settings.ai_api_url
         self.api_token = api_token or settings.ai_api_token
         self.model = model or settings.ai_model
+        self.reasoning_effort = settings.ai_reasoning_effort
         
         self.client = AsyncOpenAI(
             base_url=self.api_url,
-            api_key=self.api_token
+            api_key=self.api_token,
+            timeout=600.0
         )
         
         logger.info("ai_client_initialized", base_url=self.api_url)
@@ -37,7 +39,6 @@ class AIClient:
     async def get_structured_response(
         self, 
         prompt: str, 
-        system_prompt: str = "You are a helpful assistant.",
         reasoning_effort: Optional[str] = None,
         response_model: Optional[Type[T]] = None
     ) -> Union[T, Dict[str, Any], str]:
@@ -54,8 +55,9 @@ class AIClient:
                 "model": self.model,
                 "input": prompt
             }
-            if reasoning_effort:
-                kwargs["reasoning"] = {"effort": reasoning_effort}
+            effort = reasoning_effort or self.reasoning_effort
+            if effort:
+                kwargs["reasoning"] = {"effort": effort}
 
             # If using AsyncOpenAI, it should be awaited
             response = await self.client.responses.create(**kwargs)

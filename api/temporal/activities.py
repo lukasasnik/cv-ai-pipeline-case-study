@@ -18,6 +18,7 @@ from database import (
 from temporal.extractors.pdf_extractor import PDFExtractor
 from utils.ai_client import AIClient
 from shared.file_server_client import FileServerClient, NotFoundError, FileServerError
+from domain.software_engineering.structure_extraction.structured_extractractor import SoftwareEngineerStructuredExtractor
 import structlog
 
 logger = structlog.get_logger()
@@ -25,6 +26,7 @@ logger = structlog.get_logger()
 # Initialize AIClient and FileServerClient
 ai_client = AIClient()
 file_client = FileServerClient(settings.file_server_url)
+extractor = SoftwareEngineerStructuredExtractor(ai_client)
 
 
 async def persist_artifact(artifact: CvExecutionArtifact) -> int:
@@ -144,13 +146,12 @@ async def extract_structured_information(execution_id: int, artifact_id: int) ->
         logger.error("file_server_download_error", error=str(e), file_hash=file_hash)
         raise # Transient error, will retry
 
-    # 3. Call AIClient
+    # 3. Call AIClient via the specialized extractor
     try:
-        # Prompt for extraction (just a test as requested)
-        system_prompt = "You are a professional HR assistant. Extract structured information from the following CV text in JSON format."
-        user_prompt = f"Please extract key details (name, experience, skills) from this CV:\n\n{raw_text}"
-        
-        structured_data = await ai_client.get_structured_response(user_prompt, system_prompt)
+        # The extractor builds the prompt with the JSON schema and handles validation
+        extraction_result = await extractor.extract(raw_text)
+        # Convert the Pydantic object to a dict for uploading
+        structured_data = extraction_result.model_dump()
     except Exception as e:
         # Check if it's a transient error (like connection or timeout) or a permanent one
         # For now, let's assume OpenAI SDK errors are retryable unless we know otherwise.
