@@ -2,12 +2,20 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Requirements from file-server subdir
-COPY file-server/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=ghcr.io/astral-sh/uv:0.10.2 /uv /uvx /bin/
 
-# Copy shared code
+ENV PATH="/app/.venv/bin:$PATH"
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+
+COPY pyproject.toml uv.lock ./
+COPY api/pyproject.toml ./api/pyproject.toml
+COPY database/pyproject.toml ./database/pyproject.toml
+COPY file-server/pyproject.toml ./file-server/pyproject.toml
+COPY shared/pyproject.toml ./shared/pyproject.toml
+
 COPY shared/ ./shared/
+RUN uv sync --frozen --no-dev --project file-server
 
 # Copy file-server code
 COPY file-server/ .

@@ -1,0 +1,34 @@
+[project]
+name = "cv-ai-api"
+version = "0.1.0"
+description = "CV AI Pipeline API and Temporal worker"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncpg==0.30.*",
+    "cv-ai-database",
+    "cv-ai-shared",
+    "fastapi==0.115.*",
+    "openai",
+    "pydantic-settings==2.7.*",
+    "pymupdf==1.25.*",
+    "python-multipart==0.0.20",
+    "sqlalchemy[asyncio]==2.0.*",
+    "temporalio==1.9.*",
+    "uvicorn[standard]==0.34.*",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest==8.*",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+cv-ai-database = { workspace = true }
+cv-ai-shared = { workspace = true }

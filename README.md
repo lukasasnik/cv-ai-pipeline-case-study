@@ -43,6 +43,25 @@ docker compose up --build
 # Temporal UI:  http://localhost:8080
 ```
 
+## Python Dependencies
+
+Python dependencies are managed with `uv` from the workspace root.
+
+```bash
+# Install/sync the API + worker environment
+uv sync --project api
+
+# Run API tests
+cd api
+uv run pytest
+
+# Install/sync the file server environment
+uv sync --project file-server
+
+# Update the lockfile after changing Python dependencies
+uv lock
+```
+
 ## Project Structure
 
 ```
