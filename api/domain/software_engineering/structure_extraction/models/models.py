@@ -133,7 +133,7 @@ class Signals(BaseModel):
 
 
 class CVExtraction(BaseModel):
-    schema_version: str
+    # schema_version: str
 
     candidate: Candidate
     detection: Detection
