@@ -1,3 +1,6 @@
+from domain.software_engineering.improvements_recommendation.improvements_recommender import (
+    SoftwareEngineerHeuristicImprovementsRecommender,
+)
 from domain.software_engineering.salary_estimation.salary_estimator import (
     SoftwareEngineerHeuristicSalaryEstimator,
 )
@@ -382,3 +385,85 @@ def test_salary_estimator_produces_expected_salary_estimation():
             "['ClearScore', 'Warhorse Studios'])"
         ),
     ]
+
+
+def test_improvements_recommender():
+    extraction = CVExtraction.model_validate(RAW_CV_JSON)
+    seniority_scoring = SoftwareEngineerHeuristicAnalyzer().createSeniorityScoring(
+        extraction
+    )
+    salary_estimation = SoftwareEngineerHeuristicSalaryEstimator().createSalaryEstimation(
+        extraction=extraction,
+        seniority_scoring=seniority_scoring,
+    )
+
+    recommendation = (
+        SoftwareEngineerHeuristicImprovementsRecommender()
+        .createSalaryImprovementRecommendation(
+            extraction=extraction,
+            seniority=seniority_scoring,
+            salary_estimation=salary_estimation,
+        )
+    )
+
+    assert recommendation.target_increase_percent == 30
+    assert recommendation.realistically_achievable is True
+    assert recommendation.current_estimated_salary == 212400
+    assert recommendation.target_estimated_salary == 276120
+    assert recommendation.gap_to_target_percent == 30.0
+    assert [
+        (
+            item.title,
+            item.priority,
+            item.estimated_salary_impact_percent,
+            item.reasoning,
+        )
+        for item in recommendation.recommendations
+    ] == [
+        (
+            "Increase engineering leadership ownership",
+            "high",
+            22,
+            (
+                "Leadership is the strongest multiplier for moving from senior "
+                "\u2192 staff/principal roles. Low leadership signals limit ceiling "
+                "regardless of years."
+            ),
+        ),
+        (
+            "Gain production system ownership experience",
+            "high",
+            20,
+            (
+                "Operating production systems is a key differentiator between "
+                "senior and staff-level engineers."
+            ),
+        ),
+        (
+            "Take ownership of team-level technical decisions",
+            "high",
+            18,
+            (
+                "No explicit leadership experience detected. Even informal tech "
+                "lead responsibilities significantly increase market value."
+            ),
+        ),
+        (
+            "Build public engineering visibility (OSS, writing, speaking)",
+            "medium",
+            10,
+            (
+                "Public signals increase inbound opportunities and access to "
+                "higher-paying roles."
+            ),
+        ),
+    ]
+    assert recommendation.blockers == [
+        "Current profile aligns with junior/mid-level ceiling",
+        "No production ownership experience detected",
+        "Insufficient leadership signals for staff-level roles",
+    ]
+    assert recommendation.strategic_summary == (
+        "Salary growth is primarily driven by leadership, production ownership, "
+        "and technical breadth improvements."
+    )
