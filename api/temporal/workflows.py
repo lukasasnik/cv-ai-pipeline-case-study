@@ -8,7 +8,12 @@ from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from temporal.activities import extract_cv_text, extract_structured_information, set_execution_state
+    from temporal.activities import (
+        extract_cv_text,
+        extract_structured_information,
+        generate_analysis_outputs,
+        set_execution_state,
+    )
     from database import ExecutionState
 
 
@@ -47,6 +52,12 @@ class CvProcessingWorkflow:
                 args=[cv_execution_id, artifact_id],
                 start_to_close_timeout=timedelta(minutes=10),
             )
+
+            analysis_outputs_artifact_id = await workflow.execute_activity(
+                generate_analysis_outputs,
+                args=[cv_execution_id, structured_artifact_id],
+                start_to_close_timeout=timedelta(minutes=2),
+            )
             
             # If successful, set state to SUCCESS
             await workflow.execute_activity(
@@ -54,7 +65,11 @@ class CvProcessingWorkflow:
                 args=[cv_execution_id, ExecutionState.SUCCESS.value],
                 start_to_close_timeout=timedelta(seconds=10),
             )
-            return f"Success: Extracted artifacts {artifact_id} and {structured_artifact_id}"
+            return (
+                "Success: Extracted artifacts "
+                f"{artifact_id}, {structured_artifact_id}, "
+                f"and {analysis_outputs_artifact_id}"
+            )
 
         except ApplicationError as e:
             # Set state to ERROR and re-raise to fail the workflow
