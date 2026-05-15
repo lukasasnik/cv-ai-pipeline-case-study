@@ -21,6 +21,7 @@ from temporal.activities import (
     extract_cv_text,
     extract_structured_information,
     generate_analysis_outputs,
+    generate_llm_explanation_result,
     set_execution_state,
 )
 from temporal.workflows import CvProcessingWorkflow
@@ -46,6 +47,7 @@ async def main() -> None:
             extract_cv_text,
             extract_structured_information,
             generate_analysis_outputs,
+            generate_llm_explanation_result,
             set_execution_state,
         ],
     )

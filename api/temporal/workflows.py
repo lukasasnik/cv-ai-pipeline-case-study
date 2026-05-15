@@ -12,6 +12,7 @@ with workflow.unsafe.imports_passed_through():
         extract_cv_text,
         extract_structured_information,
         generate_analysis_outputs,
+        generate_llm_explanation_result,
         set_execution_state,
     )
     from database import ExecutionState
@@ -58,6 +59,16 @@ class CvProcessingWorkflow:
                 args=[cv_execution_id, structured_artifact_id],
                 start_to_close_timeout=timedelta(minutes=2),
             )
+
+            llm_explanation_artifact_id = await workflow.execute_activity(
+                generate_llm_explanation_result,
+                args=[
+                    cv_execution_id,
+                    structured_artifact_id,
+                    analysis_outputs_artifact_id,
+                ],
+                start_to_close_timeout=timedelta(minutes=10),
+            )
             
             # If successful, set state to SUCCESS
             await workflow.execute_activity(
@@ -68,7 +79,8 @@ class CvProcessingWorkflow:
             return (
                 "Success: Extracted artifacts "
                 f"{artifact_id}, {structured_artifact_id}, "
-                f"and {analysis_outputs_artifact_id}"
+                f"{analysis_outputs_artifact_id}, "
+                f"and {llm_explanation_artifact_id}"
             )
 
         except ApplicationError as e:

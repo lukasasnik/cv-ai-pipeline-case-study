@@ -16,6 +16,7 @@ from database import (
     CvRecord,
     ExecutionState,
 )
+from domain.software_engineering.analysis_explainer import AnalysisExplainer
 from domain.software_engineering.analysis_outputs import AnalysisOutputs
 from domain.software_engineering.improvements_recommendation.improvements_recommender import (
     SoftwareEngineerHeuristicImprovementsRecommender,
@@ -39,6 +40,7 @@ logger = structlog.get_logger()
 ai_client = AIClient()
 file_client = FileServerClient(settings.file_server_url)
 extractor = SoftwareEngineerStructuredExtractor(ai_client)
+analysis_explainer = AnalysisExplainer(ai_client)
 seniority_analyzer = SoftwareEngineerHeuristicAnalyzer()
 salary_estimator = SoftwareEngineerHeuristicSalaryEstimator()
 improvements_recommender = SoftwareEngineerHeuristicImprovementsRecommender()
@@ -297,4 +299,126 @@ async def generate_analysis_outputs(
     )
     artifact_id = await persist_artifact(new_artifact)
     logger.info("analysis_outputs_completed", artifact_id=artifact_id)
+    return artifact_id
+
+
+@activity.defn
+async def generate_llm_explanation_result(
+    cv_execution_id: int,
+    structured_artifact_id: int,
+    analysis_outputs_artifact_id: int,
+) -> int:
+    """
+    Generates an LLM explanation from structured CV data and analysis outputs.
+
+    Args:
+        cv_execution_id: ID of the CvExecution.
+        structured_artifact_id: ID of the LLM_STRUCTURED_RAW artifact.
+        analysis_outputs_artifact_id: ID of the ANALYSIS_OUTPUTS artifact.
+
+    Returns:
+        The ID of the created CvExecutionArtifact (LLM_EXPLANATION_RESULT).
+    """
+    logger.info(
+        "llm_explanation_started",
+        execution_id=cv_execution_id,
+        structured_artifact_id=structured_artifact_id,
+        analysis_outputs_artifact_id=analysis_outputs_artifact_id,
+    )
+
+    async with async_session() as db:
+        structured_artifact = await db.get(CvExecutionArtifact, structured_artifact_id)
+        if not structured_artifact:
+            raise ApplicationError(
+                f"Artifact {structured_artifact_id} not found",
+                non_retryable=True,
+            )
+
+        if structured_artifact.cv_execution_id != cv_execution_id:
+            raise ApplicationError(
+                (
+                    f"Artifact {structured_artifact_id} does not belong to "
+                    f"execution {cv_execution_id}"
+                ),
+                non_retryable=True,
+            )
+
+        if structured_artifact.type != ArtifactType.LLM_STRUCTURED_RAW:
+            raise ApplicationError(
+                (
+                    f"Artifact {structured_artifact_id} has type "
+                    f"{structured_artifact.type.value}; expected "
+                    f"{ArtifactType.LLM_STRUCTURED_RAW.value}"
+                ),
+                non_retryable=True,
+            )
+
+        analysis_outputs_artifact = await db.get(
+            CvExecutionArtifact,
+            analysis_outputs_artifact_id,
+        )
+        if not analysis_outputs_artifact:
+            raise ApplicationError(
+                f"Artifact {analysis_outputs_artifact_id} not found",
+                non_retryable=True,
+            )
+
+        if analysis_outputs_artifact.cv_execution_id != cv_execution_id:
+            raise ApplicationError(
+                (
+                    f"Artifact {analysis_outputs_artifact_id} does not belong to "
+                    f"execution {cv_execution_id}"
+                ),
+                non_retryable=True,
+            )
+
+        if analysis_outputs_artifact.type != ArtifactType.ANALYSIS_OUTPUTS:
+            raise ApplicationError(
+                (
+                    f"Artifact {analysis_outputs_artifact_id} has type "
+                    f"{analysis_outputs_artifact.type.value}; expected "
+                    f"{ArtifactType.ANALYSIS_OUTPUTS.value}"
+                ),
+                non_retryable=True,
+            )
+
+        structured_file_hash = structured_artifact.file_hash
+        analysis_outputs_file_hash = analysis_outputs_artifact.file_hash
+
+    try:
+        structured_information_json = await file_client.download_text(
+            structured_file_hash
+        )
+        analysis_outputs_json = await file_client.download_text(
+            analysis_outputs_file_hash
+        )
+    except NotFoundError as e:
+        raise ApplicationError(str(e), non_retryable=True)
+    except FileServerError as e:
+        logger.error("file_server_download_error", error=str(e))
+        raise
+
+    explanation = await analysis_explainer.createExplanation(
+        structured_information_json=structured_information_json,
+        analysis_outputs_json=analysis_outputs_json,
+    )
+
+    try:
+        upload_data = await file_client.upload(
+            "llm_explanation_result.txt",
+            explanation.encode("utf-8"),
+            "text/plain",
+        )
+        result_file_hash = upload_data.id
+    except FileServerError as e:
+        logger.error("file_server_upload_error", error=str(e))
+        raise
+
+    new_artifact = CvExecutionArtifact(
+        cv_execution_id=cv_execution_id,
+        type=ArtifactType.LLM_EXPLANATION_RESULT,
+        file_hash=result_file_hash,
+    )
+    artifact_id = await persist_artifact(new_artifact)
+    logger.info("llm_explanation_completed", artifact_id=artifact_id)
     return artifact_id
