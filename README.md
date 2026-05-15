@@ -1,6 +1,6 @@
 # CV AI Pipeline
 
-> This case study is not finished yet. It is still being improved, tuned, tested, and cleaned up, so it should not be treated as representative of the final code quality expected from its creator.
+> This case study is in its final state. It is still being improved, tuned, tested, and cleaned up, so it should not be treated as representative of the final code quality expected from its creator.
 
 A modular CV processing pipeline built with FastAPI, Temporal, PostgreSQL, React, Docker Compose, Loki, and Grafana.
 
